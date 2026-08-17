@@ -1,1 +1,81 @@
-const express=require("express");const cors=require("cors");const OpenAI=require("openai");const app=express();app.use(cors());app.use(express.json({limit:"20kb"}));const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY});app.get("/api/health",(_,res)=>res.json({ok:true,service:"studyfix-ai"}));app.post("/api/analyze",async(req,res)=>{try{const{subject,topic,attempted,correct,minutes,mistake}=req.body||{};const a=Number(attempted),c=Number(correct),m=Number(minutes);if(!subject||!topic||!Number.isFinite(a)||a<1||!Number.isFinite(c)||c<0||c>a||!Number.isFinite(m)||m<1)return res.status(400).json({error:"Invalid study result"});const accuracy=Math.round(c/a*100);const prompt=`You are StudyFix AI, a supportive study coach. Analyze this session. Subject: ${subject}. Topic: ${topic}. Attempted: ${a}. Correct: ${c}. Time: ${m} minutes. Mistake: ${mistake||"Not specified"}. Return ONLY valid JSON with keys priority (HIGH/MEDIUM/LOW), weakness, next_step, feedback. Keep it concise and do not invent unsupported facts.`;const out=await client.responses.create({model:"gpt-5.4-mini",input:prompt});let d;try{d=JSON.parse(out.output_text)}catch{d={priority:accuracy<60?"HIGH":accuracy<80?"MEDIUM":"LOW",weakness:"Review the questions you missed and identify the underlying concept.",next_step:"Review mistakes and solve a short targeted set.",feedback:"Keep tracking sessions so StudyFix can identify patterns over time."}}res.json({accuracy,...d})}catch(e){console.error(e);res.status(500).json({error:"AI analysis failed"})}});app.listen(process.env.PORT||3000,()=>console.log("StudyFix backend running"));
+const express = require("express");
+const cors = require("cors");
+const OpenAI = require("openai");
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: "20kb" }));
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+app.get("/api/health", (_, res) =>
+  res.json({ ok: true, service: "studyfix-ai" })
+);
+
+app.post("/api/analyze", async (req, res) => {
+  try {
+    const { subject, topic, attempted, correct, minutes, mistake } = req.body || {};
+    const a = Number(attempted), c = Number(correct), m = Number(minutes);
+
+    if (!subject || !topic || !Number.isFinite(a) || a < 1 ||
+        !Number.isFinite(c) || c < 0 || c > a ||
+        !Number.isFinite(m) || m < 1) {
+      return res.status(400).json({ error: "Invalid study result" });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        error: "OPENAI_API_KEY is not configured on the backend"
+      });
+    }
+
+    const accuracy = Math.round((c / a) * 100);
+
+    const prompt = `You are StudyFix AI, a supportive study coach.
+Analyze this session:
+Subject: ${subject}
+Topic: ${topic}
+Attempted: ${a}
+Correct: ${c}
+Time: ${m} minutes
+Mistake: ${mistake || "Not specified"}
+
+Return ONLY valid JSON with these keys:
+priority (HIGH, MEDIUM, or LOW)
+weakness
+next_step
+feedback
+
+Keep it concise and do not invent unsupported facts.`;
+
+    const out = await client.responses.create({
+      model: "gpt-5.4-mini",
+      input: prompt
+    });
+
+    let d;
+    try {
+      d = JSON.parse(out.output_text);
+    } catch {
+      d = {
+        priority: accuracy < 60 ? "HIGH" : accuracy < 80 ? "MEDIUM" : "LOW",
+        weakness: "Review the questions you missed and identify the underlying concept.",
+        next_step: "Review mistakes and solve a short targeted set.",
+        feedback: "Keep tracking sessions so StudyFix can identify patterns over time."
+      };
+    }
+
+    res.json({ accuracy, ...d });
+  } catch (e) {
+    console.error("ANALYZE_ERROR", e);
+    const safe = e && e.message ? String(e.message).slice(0, 500) : "Unknown backend error";
+    res.status(500).json({
+      error: "AI analysis failed",
+      detail: safe
+    });
+  }
+});
+
+app.listen(process.env.PORT || 3000, () =>
+  console.log("StudyFix backend running")
+);

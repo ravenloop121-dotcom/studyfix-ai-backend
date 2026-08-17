@@ -1,2 +1,6 @@
-# StudyFix AI Backend
-Set OPENAI_API_KEY as a server environment variable. Never put the API key in index.html. Run `npm install` then `npm start`.
+# StudyFix AI Backend Debug
+
+Upload these files to the repository root.
+
+Keep OPENAI_API_KEY only in Render Environment Variables.
+This version returns a safe diagnostic detail for API failures without exposing the API key.
